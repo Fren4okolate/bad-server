@@ -1,25 +1,9 @@
-// XSS защита - экранирование HTML
-export const sanitizeHTML = (dirty: string): string => {
-    if (!dirty || typeof dirty !== 'string') {
-        return dirty;
-    }
-    
-    let sanitized = dirty
-        .replace(/&/g, '&amp;')   
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#x27;')
-        .replace(/\//g, '&#x2F;');
+import sanitizeHtml from 'sanitize-html'
 
-    sanitized = sanitized
-        .replace(/javascript:/gi, '') 
-        .replace(/vbscript:/gi, '')   
-        .replace(/on\w+\s*=/gi, '')  
-        .replace(/expression\(/gi, '') 
-        .replace(/url\(/gi, '')       
-        .replace(/<script/gi, '&lt;script') 
-        .replace(/<\/script/gi, '&lt;/script');
-
-    return sanitized.trim();
-};
+// Rich comments may contain only formatting and HTTP(S) links, never active content.
+export const sanitizeHTML = (dirty: string): string => sanitizeHtml(dirty, {
+    allowedTags: ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 'a'],
+    allowedAttributes: { a: ['href'] },
+    allowedSchemes: ['http', 'https'],
+    allowProtocolRelative: false,
+})

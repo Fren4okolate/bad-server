@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import { NextFunction, Request, Response } from 'express'
 import { constants } from 'http2'
 import jwt, { JwtPayload } from 'jsonwebtoken'
-import { Error as MongooseError } from 'mongoose'
+import { Error as MongooseError, Types } from 'mongoose'
 import { REFRESH_TOKEN } from '../config'
 import BadRequestError from '../errors/bad-request-error'
 import ConflictError from '../errors/conflict-error'
@@ -89,34 +89,26 @@ const deleteRefreshTokenInUser = async (
     _res: Response,
     _next: NextFunction
 ) => {
-    const { cookies } = req
-    const rfTkn = cookies[REFRESH_TOKEN.cookie.name]
-
-    if (!rfTkn) {
-        throw new UnauthorizedError('Не валидный токен')
-    }
-
-    const decodedRefreshTkn = jwt.verify(
-        rfTkn,
-        REFRESH_TOKEN.secret
-    ) as JwtPayload
-    const user = await User.findOne({
-        _id: decodedRefreshTkn._id,
-    }).orFail(() => new UnauthorizedError('Пользователь не найден в базе'))
-
-    const rTknHash = crypto
-        .createHmac('sha256', REFRESH_TOKEN.secret)
-        .update(rfTkn)
-        .digest('hex')
-
-    user.tokens = user.tokens.filter((tokenObj) => tokenObj.token !== rTknHash)
-
-    await user.save()
+    const rfTkn = req.cookies[REFRESH_TOKEN.cookie.name]
+    if (typeof rfTkn !== 'string' || rfTkn.length > 4096) throw new UnauthorizedError('Не валидный токен')
+    let decoded: JwtPayload
+    try {
+        const value = jwt.verify(rfTkn, REFRESH_TOKEN.secret, { algorithms: ['HS256'] })
+        if (typeof value === 'string' || value.type !== 'refresh' || !Types.ObjectId.isValid(String(value.sub))) throw new Error('invalid')
+        decoded = value
+    } catch (_error) { throw new UnauthorizedError('Не валидный токен') }
+    const hash = crypto.createHmac('sha256', REFRESH_TOKEN.secret).update(rfTkn).digest('hex')
+    // Consume exactly one stored token atomically: replay and concurrent reuse fail.
+    const user = await User.findOneAndUpdate(
+        { _id: decoded.sub, 'tokens.token': hash },
+        { $pull: { tokens: { token: hash } } },
+        { new: true }
+    ).orFail(() => new UnauthorizedError('Не валидный токен'))
 
     return user
 }
 
-// GET  /auth/logout
+// POST /auth/logout
 const logout = async (req: Request, res: Response, next: NextFunction) => {
     try {
         await deleteRefreshTokenInUser(req, res, next)
@@ -133,7 +125,7 @@ const logout = async (req: Request, res: Response, next: NextFunction) => {
     }
 }
 
-// GET  /auth/token
+// POST /auth/token
 const refreshAccessToken = async (
     req: Request,
     res: Response,
@@ -187,7 +179,7 @@ const updateCurrentUser = async (
     try {
         // Разрешаем обновлять только безопасный набор полей
         const allowedFields = ['name', 'phone'] as const
-        const updates: Record<string, any> = {}
+        const updates: Record<string, string> = {}
         allowedFields.forEach((f) => {
             if (req.body[f] !== undefined) updates[f] = req.body[f]
         })

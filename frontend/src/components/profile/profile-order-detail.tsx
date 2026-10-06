@@ -1,3 +1,4 @@
+import { safeComment } from '../../utils/sanitize-html'
 import Button from '@components/button'
 import DetailInfo from '@components/detail-info'
 import { OrderData } from '@slices/orders/type'
@@ -73,7 +74,7 @@ export default function ProfileOrderDetail() {
                         {dataInfo.comment ? (
                             <div
                                 dangerouslySetInnerHTML={{
-                                    __html: dataInfo.comment,
+                                    __html: safeComment(dataInfo.comment),
                                 }}
                             />
                         ) : (

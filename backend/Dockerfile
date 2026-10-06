@@ -1,7 +1,8 @@
 FROM node:22-alpine
-RUN mkdir /app
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-CMD ["npm", "run", "dev"]
+RUN npm run build && mkdir -p temp src/public/images && chown -R node:node /app
+USER node
+CMD ["node", "dist/app.js"]

@@ -1,3 +1,4 @@
+import { safeComment } from '../../utils/sanitize-html'
 import OpenInNewIcon from '@assets/open_in_new.svg?react'
 import Button from '@components/button'
 import DetailInfo from '@components/detail-info'
@@ -103,7 +104,7 @@ export default function AdminOrderDetail() {
                     <>
                         <div
                             dangerouslySetInnerHTML={{
-                                __html: dataInfo.comment,
+                                __html: safeComment(dataInfo.comment),
                             }}
                         />
                     </>
@@ -124,7 +125,7 @@ export default function AdminOrderDetail() {
                 extraClass: styles.admin__gridRowFullWidth,
             },
         ],
-        [orderData]
+        [orderData, navigate]
     )
 
     if (!orderData) {

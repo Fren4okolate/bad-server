@@ -68,10 +68,10 @@ export default function Card({
                     </>
                 )}
                 <div className={styles.card__row}>
-                    {price && full && (
+                    {price !== null && full && (
                         <Button
                             onClick={() => {
-                                isBasket
+                                return isBasket
                                     ? navigate(
                                           { pathname: AppRoute.Basket },
                                           {
@@ -92,7 +92,7 @@ export default function Card({
                         </Button>
                     )}
                     <span className={styles.card__price}>
-                        {price ? `${price} синапсов` : 'Бесценно'}
+                        {price !== null ? `${price} синапсов` : 'Бесценно'}
                     </span>
                 </div>
             </div>

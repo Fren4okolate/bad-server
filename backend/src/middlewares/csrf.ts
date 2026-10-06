@@ -1,9 +1,9 @@
-export const csrfDocumentation = {
-    description: 'CSRF защита через SameSite cookies и Authorization headers',
-    methods: [
-        'SameSite=strict для refresh token cookie',
-        'JWT токен в Authorization заголовке для API операций',
-        'Проверка Origin/Referer браузером',
-    ],
-}
+import { csrfSync } from 'csrf-sync'
 
+export const { generateToken, csrfSynchronisedProtection } = csrfSync({
+    size: 32,
+    getTokenFromRequest: (req) => {
+        const token = req.get('x-csrf-token')
+        return token && token.length <= 128 ? token : undefined
+    },
+})

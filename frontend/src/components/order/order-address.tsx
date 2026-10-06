@@ -35,9 +35,11 @@ export function OrderAddress() {
             address: orderPersistData.address,
             payment: PaymentType.Online,
         })
-    }, [orderPersistData])
+    }, [orderPersistData, setValuesForm])
 
-    const nextStep = () => {
+    const nextStep = (event: React.SyntheticEvent<HTMLFormElement>) => {
+        event.preventDefault()
+        if (!isValid) return
         setInfo(values)
         navigate(
             { pathname: AppRoute.OrderContacts },
@@ -50,7 +52,7 @@ export function OrderAddress() {
     }
 
     return (
-        <Form formRef={formRef}>
+        <Form formRef={formRef} handleFormSubmit={nextStep}>
             <div className={styles.order__field}>
                 <div className={styles.order__buttons}>
                     <Radio
@@ -78,7 +80,7 @@ export function OrderAddress() {
             <Input
                 value={values.address || ''}
                 onChange={handleChange}
-                name='address'
+                name='address' maxLength={500}
                 type='text'
                 placeholder='Введите адрес'
                 label='Адрес доставки'
@@ -87,7 +89,7 @@ export function OrderAddress() {
                 error={errors.address}
             />
             <div className={styles.order__buttons}>
-                <Button type='submit' onClick={nextStep} disabled={!isValid}>
+                <Button type='submit'  disabled={!isValid}>
                     Далее
                 </Button>
             </div>

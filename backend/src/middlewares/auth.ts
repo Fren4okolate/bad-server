@@ -1,9 +1,8 @@
 import { NextFunction, Request, Response } from 'express'
 import jwt, { JwtPayload } from 'jsonwebtoken'
-import { Model, Types } from 'mongoose'
+import { Types } from 'mongoose'
 import { ACCESS_TOKEN } from '../config'
 import ForbiddenError from '../errors/forbidden-error'
-import NotFoundError from '../errors/not-found-error'
 import UnauthorizedError from '../errors/unauthorized-error'
 import UserModel, { Role } from '../models/user'
 
@@ -12,7 +11,7 @@ import UserModel, { Role } from '../models/user'
 const auth = async (req: Request, res: Response, next: NextFunction) => {
     let payload: JwtPayload | null = null
     const authHeader = req.header('Authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader || authHeader.length > 4096 || !authHeader.startsWith('Bearer ')) {
         return next(new UnauthorizedError('Необходима авторизация'))
     }
     try {
@@ -21,8 +20,11 @@ const auth = async (req: Request, res: Response, next: NextFunction) => {
             return next(new UnauthorizedError('Невалидный токен'))
         }
         const aTkn = accessTokenParts[1]
-        payload = jwt.verify(aTkn, ACCESS_TOKEN.secret) as JwtPayload
+        payload = jwt.verify(aTkn, ACCESS_TOKEN.secret, { algorithms: ['HS256'] }) as JwtPayload
 
+        if (!payload || payload.type !== 'access' || !Types.ObjectId.isValid(String(payload.sub))) {
+            return next(new UnauthorizedError('Невалидный токен'))
+        }
         const user = await UserModel.findOne(
             {
                 _id: new Types.ObjectId(payload.sub),
@@ -53,41 +55,6 @@ export function roleGuardMiddleware(...roles: Role[]) {
 
         const hasAccess = roles.some((role) =>
             res.locals.user.roles.includes(role)
-        )
-
-        if (!hasAccess) {
-            return next(new ForbiddenError('Доступ запрещен'))
-        }
-
-        return next()
-    }
-}
-
-export function currentUserAccessMiddleware<T>(
-    model: Model<T>,
-    idProperty: string,
-    userProperty: keyof T
-) {
-    return async (req: Request, res: Response, next: NextFunction) => {
-        const id = req.params[idProperty]
-
-        if (!res.locals.user) {
-            return next(new UnauthorizedError('Необходима авторизация'))
-        }
-
-        if (res.locals.user.roles.includes(Role.Admin)) {
-            return next()
-        }
-
-        const entity = await model.findById(id)
-
-        if (!entity) {
-            return next(new NotFoundError('Не найдено'))
-        }
-
-        const userEntityId = entity[userProperty] as Types.ObjectId
-        const hasAccess = new Types.ObjectId(res.locals.user.id).equals(
-            userEntityId
         )
 
         if (!hasAccess) {

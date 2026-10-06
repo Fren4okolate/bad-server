@@ -1,3 +1,4 @@
+import { safeComment } from '../../utils/sanitize-html'
 import {
     ContentEditableEvent,
     createButton,
@@ -14,7 +15,7 @@ type EditorInputProps = {
 
 export default function EditorInput({ onChange, value }: EditorInputProps) {
     function handleChangeElement(e: ContentEditableEvent) {
-        onChange(e.target.value)
+        onChange(safeComment(e.target.value).slice(0, 2000))
     }
 
     const BtnLinkCustom = createButton(
@@ -24,12 +25,9 @@ export default function EditorInput({ onChange, value }: EditorInputProps) {
             if ($selection?.nodeName === 'A') {
                 document.execCommand('unlink')
             } else {
-                // eslint-disable-next-line no-alert
-                document.execCommand(
-                    'createLink',
-                    false,
-                    prompt('URL', '') || undefined
-                )
+
+                const url = prompt('URL', '')
+                if (url && /^https?:\/\//i.test(url)) document.execCommand('createLink', false, url)
             }
         }
     )
@@ -37,7 +35,10 @@ export default function EditorInput({ onChange, value }: EditorInputProps) {
     return (
         <div className='customEditor'>
             <EditorProvider>
-                <Editor value={value} onChange={handleChangeElement}>
+                <Editor value={safeComment(value)} onChange={handleChangeElement} onPaste={(event) => {
+                    event.preventDefault()
+                    document.execCommand('insertText', false, event.clipboardData.getData('text/plain'))
+                }}>
                     <Toolbar>
                         <span className='rsw-link-title'>
                             Вставить ссылку <BtnLinkCustom />
