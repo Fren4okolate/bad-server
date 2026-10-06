@@ -165,7 +165,7 @@ export const getCustomerById = async (
     try {
         const user = await User.findById(req.params.id).orFail(() => new NotFoundError('Пользователь не найден')).populate([
             'orders',
-            'lastOrder',
+            { path: 'lastOrder', populate: { path: 'products' } },
         ])
         res.status(200).json(user)
     } catch (error) {

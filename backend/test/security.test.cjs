@@ -117,6 +117,8 @@ test('Customer filters retain their conditions and treat regex input as literal 
     assert.equal(response.body.pagination.pageSize, 10);
     assert.equal(response.body.customers.length, 1);
     assert.equal(response.body.customers[0].name, 'Alice');
+    const details = await c.agent.get(`/customers/${customer._id}`).set('Authorization', `Bearer ${c.token}`).expect(200);
+    assert.equal(details.body.lastOrder.products[0].title, product.title);
     assert.doesNotMatch(JSON.stringify(response.body), /"password"|"tokens"/);
     await c.agent.get('/customers').query({ search: '1+{}$()' }).set('Authorization', `Bearer ${c.token}`).expect(200);
     await c.agent.get('/customers?name[$ne]=Alice').set('Authorization', `Bearer ${c.token}`).expect(400);
