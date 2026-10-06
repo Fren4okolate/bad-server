@@ -1,0 +1,65 @@
+services:
+  frontend:
+    build:
+      context: frontend
+    env_file:
+      - frontend/.env
+    volumes:
+      - frontend:/app/frontend/dist
+
+  mongo:
+    image: mongo
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    volumes:
+      - db:/data/db
+    ports:
+      - 27018:27017
+    networks:
+      - internal
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/weblarek --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  backend:
+    restart: always
+    build:
+      context: backend
+    env_file:
+      - backend/.env
+    volumes:
+      - ./backend/src:/app/src
+      - public:/app/src/public
+    ports:
+      - 3000:3000
+    networks:
+      - internal
+    depends_on:
+      - mongo
+
+  server:
+    build:
+      context: nginx
+    ports:
+      - 80:80
+    volumes:
+      - frontend:/var/app
+      - public:/var/public
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - internal
+
+volumes:
+  frontend:
+  public:
+  db:
+
+networks:
+  internal:
