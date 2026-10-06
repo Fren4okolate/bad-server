@@ -90,6 +90,7 @@ export function OrderContacts() {
                 value={values.phone || ''}
                 onChange={handleChange}
                 name='phone'
+                pattern={'\\+7 \\([0-9]{3}\\) [0-9]{3} [0-9]{2} [0-9]{2}'}
                 type='tel'
                 placeholder='+7 (999) 999-99-99'
                 mask='+7 (999) 999 99 99'

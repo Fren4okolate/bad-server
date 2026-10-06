@@ -26,5 +26,9 @@ jobs:
       run: set -eu && git clone --depth 1 $REP_TESTS $DIR_TESTS
     - name: Start project
       run: bash $DIR_TESTS/bin/start_project.sh
+    - name: Generate missing upload fixtures
+      run: |
+        docker compose exec -T backend node -e "require('sharp')({create:{width:400,height:400,channels:3,background:'#ff5533'}}).png({compressionLevel:0}).toBuffer().then(buffer=>process.stdout.write(buffer))" > "$DIR_TESTS/data/mimage.png"
+        docker compose exec -T backend node -e "require('sharp')({create:{width:2000,height:2000,channels:3,background:'#ff5533'}}).png({compressionLevel:0}).toBuffer().then(buffer=>process.stdout.write(buffer))" > "$DIR_TESTS/data/bimage.png"
     - name: Run tests
       run: bash $DIR_TESTS/bin/run.sh
