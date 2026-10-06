@@ -30,11 +30,11 @@ export interface IUser extends Document {
 interface IUserMethods {
     generateAccessToken(): string
     generateRefreshToken(): Promise<string>
-    toJSON(): string
+    toJSON(): unknown
     calculateOrderStats(): Promise<void>
 }
 
-interface IUserModel extends Model<IUser, {}, IUserMethods> {
+interface IUserModel extends Model<IUser, Record<string, never>, IUserMethods> {
     findUserByCredentials: (
         email: string,
         password: string
@@ -52,6 +52,8 @@ const userSchema = new mongoose.Schema<IUser, IUserModel, IUserMethods>(
         // в схеме пользователя есть обязательные email и password
         email: {
             type: String,
+            maxlength: 254,
+            lowercase: true,
             required: [true, 'Поле "email" должно быть заполнено'],
             unique: true, // поле email уникально (есть опция unique: true);
             validate: {
@@ -80,6 +82,7 @@ const userSchema = new mongoose.Schema<IUser, IUserModel, IUserMethods>(
         },
         phone: {
             type: String,
+            maxlength: 32,
         },
         lastOrderDate: {
             type: Date,
@@ -135,6 +138,7 @@ userSchema.methods.generateAccessToken = function generateAccessToken() {
         {
             _id: user._id.toString(),
             email: user.email,
+            type: 'access',
         },
         ACCESS_TOKEN.secret,
         {
@@ -151,6 +155,8 @@ userSchema.methods.generateRefreshToken =
         const refreshToken = jwt.sign(
             {
                 _id: user._id.toString(),
+                type: 'refresh',
+                jti: crypto.randomUUID(),
             },
             REFRESH_TOKEN.secret,
             {
@@ -166,8 +172,9 @@ userSchema.methods.generateRefreshToken =
             .digest('hex')
 
         // Сохраняем refresh токена в базу данных, можно делать в контроллере авторизации/регистрации
-        user.tokens.push({ token: rTknHash })
-        await user.save()
+        await (user.constructor as IUserModel).updateOne({ _id: user._id }, {
+            $push: { tokens: { $each: [{ token: rTknHash }], $slice: -10 } },
+        })
 
         return refreshToken
     }
@@ -176,7 +183,7 @@ userSchema.statics.findUserByCredentials = async function findByCredentials(
     email: string,
     password: string
 ) {
-    const user = await this.findOne({ email })
+    const user = await this.findOne({ email: email.toLowerCase() })
         .select('+password')
         .orFail(() => new UnauthorizedError('Неправильные почта или пароль'))
     const passwdMatch = await bcrypt.compare(password, user.password)
@@ -190,6 +197,7 @@ userSchema.methods.calculateOrderStats = async function calculateOrderStats() {
     const user = this
     const orderStats = await mongoose.model('order').aggregate([
         { $match: { customer: user._id } },
+        { $sort: { createdAt: 1 } },
         {
             $group: {
                 _id: null,
@@ -199,7 +207,7 @@ userSchema.methods.calculateOrderStats = async function calculateOrderStats() {
                 lastOrder: { $last: '$_id' },
             },
         },
-    ])
+    ]).option({ maxTimeMS: 5000 })
 
     if (orderStats.length > 0) {
         const stats = orderStats[0]
@@ -214,7 +222,10 @@ userSchema.methods.calculateOrderStats = async function calculateOrderStats() {
         user.lastOrder = null
     }
 
-    await user.save()
+    await (user.constructor as IUserModel).updateOne({ _id: user._id }, { $set: {
+        totalAmount: user.totalAmount, orderCount: user.orderCount,
+        lastOrderDate: user.lastOrderDate, lastOrder: user.lastOrder,
+    } })
 }
 const UserModel = mongoose.model<IUser, IUserModel>('user', userSchema)
 

@@ -11,3 +11,5 @@ backend/public/
 backend/temp/
 backend/src/public/temp/
 coverage/
+.playwright-cli/
+output/playwright/

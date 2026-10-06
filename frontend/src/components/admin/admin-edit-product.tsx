@@ -71,7 +71,7 @@ export default function AdminEditProduct() {
                 title: currentProduct.title,
             })
         }
-    }, [currentProduct])
+    }, [currentProduct, setValuesForm])
 
     const handleUpdateProduct = async () => {
         if (!selectedCategory) {
@@ -81,11 +81,10 @@ export default function AdminEditProduct() {
             ...values,
             category: selectedCategory?.title as keyof typeof CATEGORY_CLASSES,
             image: selectedFile ? selectedFile : undefined,
-            price: values.price ? values.price : null,
+            price: String(values.price) === '' || values.price === null ? null : Number(values.price),
         }
 
-        editId &&
-            updateProduct({ data: dataProduct, id: editId })
+        if (editId) updateProduct({ data: dataProduct, id: editId })
                 .unwrap()
                 .then(() => navigateAdminList())
                 .catch((error) => toast.error(error.message))
@@ -96,8 +95,7 @@ export default function AdminEditProduct() {
     }
 
     const handleDeleteProduct = () => {
-        editId &&
-            deleteProduct(editId)
+        if (editId) deleteProduct(editId)
                 .unwrap()
                 .then(() => navigateAdminList())
                 .catch((error) => toast.error(error.message))
@@ -112,7 +110,7 @@ export default function AdminEditProduct() {
             <Input
                 value={values.title || ''}
                 onChange={handleChange}
-                name='title'
+                name='title' maxLength={30}
                 type='text'
                 placeholder='Придумайте название'
                 label='Название'
@@ -129,7 +127,7 @@ export default function AdminEditProduct() {
                 value={values.description || ''}
                 onChange={handleChange}
                 component='textarea'
-                name='description'
+                name='description' maxLength={2000}
                 placeholder='Введите описание'
                 label='Описание'
                 required
@@ -140,7 +138,7 @@ export default function AdminEditProduct() {
                 extraClassLabel={styles.label__price}
                 onChange={handleChange}
                 type='number'
-                name='price'
+                name='price' min={0} max={1000000000} step={1}
                 placeholder='Введите стоимость'
                 label='Стоимость (в синапсах)'
                 error={errors.description}
@@ -150,7 +148,7 @@ export default function AdminEditProduct() {
                 extraClass={styles.admin__file}
                 inputRef={fileRef}
                 label='Заменить изображение'
-                accept='image/*,.png,.jpeg,.jpg,.svg'
+                accept='image/png,image/jpeg,image/gif,image/webp'
                 fileName={currentProduct?.image.originalName}
             />
             <div className={styles.admin__buttons}>

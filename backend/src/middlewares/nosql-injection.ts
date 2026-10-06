@@ -1,55 +1,20 @@
-import { NextFunction, Request, Response } from 'express'
+import { RequestHandler } from 'express'
 import BadRequestError from '../errors/bad-request-error'
 
-export const validateNoSQLInjection = (
-    req: Request,
-    _res: Response,
-    next: NextFunction
-) => {
-    try {
-        // Более гибкая проверка: проверяем query и body, но разрешаем простые параметры поиска в query
-        const checkForOperators = (obj: any, path: string = '', isQuery: boolean = false): void => {
-            if (!obj || typeof obj !== 'object') return
-
-            Object.keys(obj).forEach((key) => {
-                const currentPath = path ? `${path}.${key}` : key
-
-                // Блокируем операторы MongoDB в ключах
-                if (key.startsWith('$')) {
-                    throw new BadRequestError(
-                        `Запрещенный оператор: ${currentPath}`
-                    )
-                }
-
-                const value = obj[key]
-
-                // Блокируем оператор $ в значениях, но разрешаем его в простых query-параметрах поиска
-                if (typeof value === 'string' && value.includes('$')) {
-                    const simpleSearchParams = ['search', 'name', 'q']
-                    if (!(isQuery && simpleSearchParams.includes(key))) {
-                        throw new BadRequestError(
-                            `Запрещенный символ в значении: ${currentPath}`
-                        )
-                    }
-                }
-
-                // Рекурсивно проверяем вложенные объекты
-                if (typeof value === 'object' && value !== null) {
-                    checkForOperators(value, currentPath, isQuery)
-                }
-            })
+export const validateNoSQLInjection: RequestHandler = (req, _res, next) => {
+    // An iterative walk bounds depth and avoids stack overflow on malicious JSON.
+    const stack: { value: unknown; depth: number }[] = [{ value: req.body, depth: 0 }, { value: req.query, depth: 0 }]
+    while (stack.length) {
+        const entry = stack.pop()!
+        if (entry.value && typeof entry.value === 'object') {
+        if (entry.depth > 10) { next(new BadRequestError('Слишком глубокие данные')); return }
+        const entries = Object.entries(entry.value)
+        if (entries.some(([key]) => key.startsWith('$') || key.includes('.') || key.includes('[')
+            || ['__proto__', 'prototype', 'constructor'].includes(key))) {
+            next(new BadRequestError('Недопустимые ключи запроса')); return
         }
-
-        // Проверяем query параметры (помечаем как isQuery=true)
-        checkForOperators(req.query, '', true)
-
-        // Проверяем body
-        if (req.body && typeof req.body === 'object') {
-            checkForOperators(req.body, '', false)
+        entries.forEach(([, value]) => stack.push({ value, depth: entry.depth + 1 }))
         }
-
-        next()
-    } catch (error) {
-        next(error)
     }
+    next()
 }

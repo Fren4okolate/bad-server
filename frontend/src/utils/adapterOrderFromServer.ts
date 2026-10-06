@@ -9,6 +9,7 @@ export function adapterOrderFromServer(orderInfo: OrderDataFromServer) {
         orderNumber: orderInfo.orderNumber,
         orderDate: format(new Date(orderInfo.createdAt), 'dd.MM.yyyy'),
         customer: orderInfo.customer.name,
+        customerId: orderInfo.customer.id,
         comment: orderInfo.comment,
         status: FILTER_ORDER_MAP[orderInfo.status],
         totalAmount: `${orderInfo.totalAmount} синапсов`,

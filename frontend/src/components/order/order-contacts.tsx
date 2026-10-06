@@ -1,5 +1,6 @@
+import { toast } from 'react-toastify'
 import InputMask from '@mona-health/react-input-mask'
-import { SyntheticEvent, useEffect, useRef } from 'react'
+import { SyntheticEvent, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AppRoute } from '../../utils/constants'
 import Button from '../button/button'
@@ -18,6 +19,7 @@ import EditorInput from '../editor-text/editor-input'
 import styles from './order.module.scss'
 
 export function OrderContacts() {
+    const [submitting, setSubmitting] = useState(false)
     const location = useLocation()
     const navigate = useNavigate()
     const { selectOrderInfo } = orderFormSelector
@@ -38,7 +40,7 @@ export function OrderContacts() {
             email: orderPersistData.email,
             phone: orderPersistData.phone,
         })
-    }, [orderPersistData])
+    }, [orderPersistData, setValuesForm])
 
     const handleEditInputChange = (value: string) => {
         setValuesForm({ ...values, comment: value })
@@ -46,6 +48,8 @@ export function OrderContacts() {
 
     const handleFormSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
         e.preventDefault()
+        if (!isValid || submitting) return
+        setSubmitting(true)
         setInfo(values)
         // т.к. на момент отправки запроса данные введенные в поля еще не записаны в store, добавляем в запрос их вручную
         createOrder({ ...orderPersistData, ...values })
@@ -66,7 +70,8 @@ export function OrderContacts() {
                         replace: true,
                     }
                 )
-            })
+            }).catch((error: { message?: string }) => toast.error(error.message || 'Не удалось оформить заказ'))
+            .finally(() => setSubmitting(false))
     }
 
     return (
@@ -74,7 +79,7 @@ export function OrderContacts() {
             <Input
                 value={values.email || ''}
                 onChange={handleChange}
-                name='email'
+                name='email' maxLength={254}
                 type='email'
                 placeholder='Введите Email'
                 label='Email'
@@ -85,6 +90,7 @@ export function OrderContacts() {
                 value={values.phone || ''}
                 onChange={handleChange}
                 name='phone'
+                pattern={'\\+7 \\([0-9]{3}\\) [0-9]{3} [0-9]{2} [0-9]{2}'}
                 type='tel'
                 placeholder='+7 (999) 999-99-99'
                 mask='+7 (999) 999 99 99'
@@ -112,7 +118,7 @@ export function OrderContacts() {
                 >
                     Назад
                 </Button>
-                <Button type='submit' disabled={!isValid}>
+                <Button type='submit' disabled={!isValid || submitting}>
                     Оплатить
                 </Button>
             </div>

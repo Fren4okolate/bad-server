@@ -38,7 +38,7 @@ export default function RegisterPage() {
                 <Input
                     value={values.name || ''}
                     onChange={handleChange}
-                    name='name'
+                    name='name' minLength={2} maxLength={30}
                     type='text'
                     placeholder='Введите имя'
                     label='Имя'
@@ -48,8 +48,8 @@ export default function RegisterPage() {
                 <Input
                     value={values.email || ''}
                     onChange={handleChange}
-                    name='email'
-                    type='email'
+                    name='email' maxLength={254}
+                    type='email' autoComplete='email'
                     placeholder='Введите email'
                     label='Email'
                     required
@@ -58,8 +58,8 @@ export default function RegisterPage() {
                 <Input
                     value={values.password || ''}
                     onChange={handleChange}
-                    name='password'
-                    type='password'
+                    name='password' minLength={6} maxLength={72}
+                    type='password' autoComplete='new-password'
                     placeholder='Введите пароль'
                     label='Пароль'
                     required

@@ -6,7 +6,7 @@ export interface OrderValueType {
     title: string
     value: string | number
 }
-export interface OrderDataFromServer extends IOrderResult {}
+export type OrderDataFromServer = IOrderResult
 
 export interface OrderDataList {
     key: string
@@ -17,7 +17,7 @@ export interface OrderDataList {
     productNames: string[]
 }
 
-export interface OrderData extends ReturnType<typeof adapterOrderFromServer> {}
+export type OrderData = ReturnType<typeof adapterOrderFromServer>
 
 export interface FiltersOrder {
     orderDateFrom: string

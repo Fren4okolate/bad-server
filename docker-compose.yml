@@ -2,64 +2,64 @@ services:
   frontend:
     build:
       context: frontend
-    env_file:
-      - frontend/.env
+    environment:
+      VITE_API_ORIGIN: /api
     volumes:
       - frontend:/app/frontend/dist
-
+    logging:
+      options: {max-size: 10m, max-file: '3'}
   mongo:
-    image: mongo
-    restart: always
+    image: mongo:7
+    restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-example}
     volumes:
       - db:/data/db
-    ports:
-      - 27018:27017
-    networks:
-      - internal
+    networks: [internal]
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/weblarek --quiet
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
+      test: [CMD, mongosh, --quiet, --eval, "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      options: {max-size: 10m, max-file: '3'}
   backend:
-    restart: always
     build:
       context: backend
+    restart: unless-stopped
     env_file:
-      - backend/.env
+      - path: backend/.env
+        required: false
+    environment:
+      DB_ADDRESS: mongodb://root:${MONGO_PASSWORD:-example}@mongo:27017/weblarek?authSource=admin
+      ORIGIN_ALLOW: http://localhost:5173,http://localhost
+      TRUST_PROXY: '1'
+      COOKIE_SECURE: 'false'
+      SEED_PATH: /app/.dump
     volumes:
-      - ./backend/src:/app/src
       - public:/app/src/public
-    ports:
-      - 3000:3000
-    networks:
-      - internal
+      - ./.dump:/app/.dump:ro
+    networks: [internal]
     depends_on:
-      - mongo
-
+      mongo: {condition: service_healthy}
+    logging:
+      options: {max-size: 10m, max-file: '3'}
   server:
     build:
       context: nginx
-    ports:
-      - 80:80
+    ports: [127.0.0.1:80:80]
     volumes:
-      - frontend:/var/app
-      - public:/var/public
+      - frontend:/var/app:ro
     depends_on:
-      - frontend
-      - backend
-    networks:
-      - internal
-
+      frontend: {condition: service_completed_successfully}
+      backend: {condition: service_started}
+    networks: [internal]
+    logging:
+      options: {max-size: 10m, max-file: '3'}
 volumes:
   frontend:
   public:
   db:
-
 networks:
   internal:

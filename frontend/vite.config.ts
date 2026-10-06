@@ -13,12 +13,14 @@ export default defineConfig({
       $assets: resolve('./src/assets'),
     }
   },
+  server: { proxy: { '/api': { target: 'http://localhost:3000', rewrite: (url) => url.replace(/^\/api/, '') } } },
   build: {
     assetsInlineLimit:0,
   },
   css: {
     preprocessorOptions: {
       scss: {
+        loadPaths: [resolve('.')],
         additionalData: `
           @use "./src/scss/variables" as *;
           @use "./src/scss/mixins";

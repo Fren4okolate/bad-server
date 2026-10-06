@@ -37,6 +37,8 @@ class Api {
     constructor(baseUrl: string, options: RequestInit = {}) {
         this.baseUrl = baseUrl
         this.options = {
+            ...options,
+            credentials: 'include',
             headers: {
                 ...((options.headers as object) ?? {}),
             },
@@ -54,20 +56,22 @@ class Api {
     }
 
     protected async request<T>(endpoint: string, options: RequestInit) {
-        try {
-            const res = await fetch(`${this.baseUrl}${endpoint}`, {
-                ...this.options,
-                ...options,
-            })
-            return await this.handleResponse<T>(res)
-        } catch (error) {
-            return Promise.reject(error)
+        const headers = new Headers(this.options.headers)
+        new Headers(options.headers).forEach((value, key) => headers.set(key, value))
+        const method = options.method || 'GET'
+        if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+            const response = await fetch(`${this.baseUrl}/auth/csrf-token`, { credentials: 'include' })
+            const { csrfToken } = await this.handleResponse<{ csrfToken: string }>(response)
+            headers.set('X-CSRF-Token', csrfToken)
         }
+        const res = await fetch(`${this.baseUrl}${endpoint}`, { ...this.options, ...options, credentials: 'include', headers })
+        return this.handleResponse<T>(res)
     }
 
+    private refreshing: Promise<UserResponseToken> | undefined
     private refreshToken = () => {
         return this.request<UserResponseToken>('/auth/token', {
-            method: 'GET',
+            method: 'POST',
             credentials: 'include',
         })
     }
@@ -79,7 +83,11 @@ class Api {
         try {
             return await this.request<T>(endpoint, options)
         } catch (error) {
-            const refreshData = await this.refreshToken()
+            if (!error || typeof error !== 'object' || !('statusCode' in error) || error.statusCode !== 401) throw error
+            if (!this.refreshing) {
+                this.refreshing = this.refreshToken().finally(() => { this.refreshing = undefined })
+            }
+            const refreshData = await this.refreshing
             if (!refreshData.success) {
                 return Promise.reject(refreshData)
             }
@@ -111,13 +119,18 @@ export class WebLarekAPI extends Api implements IWebLarekAPI {
         this.cdn = cdn
     }
 
+    private imageUrl(fileName: string): string {
+        return /^\/images\/[A-Za-z0-9_-]{1,100}\.(png|jpg|jpeg|webp|gif)$/.test(fileName)
+            ? this.cdn + fileName : ''
+    }
+
     getProductItem = (id: string): Promise<IProduct> => {
         return this.request<IProduct>(`/product/${id}`, { method: 'GET' }).then(
             (data: IProduct) => ({
                 ...data,
                 image: {
                     ...data.image,
-                    fileName: this.cdn + data.image.fileName,
+                    fileName: this.imageUrl(data.image.fileName),
                 },
             })
         )
@@ -140,7 +153,7 @@ export class WebLarekAPI extends Api implements IWebLarekAPI {
                 ...item,
                 image: {
                     ...item.image,
-                    fileName: this.cdn + item.image.fileName,
+                    fileName: this.imageUrl(item.image.fileName),
                 },
             })),
         }))
@@ -293,13 +306,12 @@ export class WebLarekAPI extends Api implements IWebLarekAPI {
 
     logoutUser = () => {
         return this.request<ServerResponse<unknown>>('/auth/logout', {
-            method: 'GET',
+            method: 'POST',
             credentials: 'include',
         })
     }
 
     createProduct = (data: Omit<IProduct, '_id'>) => {
-        console.log(data)
         return this.requestWithRefresh<IProduct>('/product', {
             method: 'POST',
             body: JSON.stringify(data),
@@ -311,7 +323,7 @@ export class WebLarekAPI extends Api implements IWebLarekAPI {
             ...data,
             image: {
                 ...data.image,
-                fileName: this.cdn + data.image.fileName,
+                fileName: this.imageUrl(data.image.fileName),
             },
         }))
     }
@@ -341,7 +353,7 @@ export class WebLarekAPI extends Api implements IWebLarekAPI {
             ...data,
             image: {
                 ...data.image,
-                fileName: this.cdn + data.image.fileName,
+                fileName: this.imageUrl(data.image.fileName),
             },
         }))
     }

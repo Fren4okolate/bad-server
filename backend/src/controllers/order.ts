@@ -4,7 +4,7 @@ import BadRequestError from '../errors/bad-request-error'
 import NotFoundError from '../errors/not-found-error'
 import Order, { IOrder, StatusType } from '../models/order'
 import Product, { IProduct } from '../models/product'
-import User from '../models/user'
+import { sanitizeHTML } from '../utils/sanitize'
 import escapeRegExp from '../utils/escapeRegExp'
 
 // eslint-disable-next-line max-len
@@ -64,7 +64,7 @@ export const getOrders = async (
         }
 
         if (orderDateTo) {
-            const endOfDay = new Date(orderDateFrom as string)
+            const endOfDay = new Date(orderDateTo as string)
             endOfDay.setHours(23, 59, 59, 999)
             filters.createdAt = {
                 ...filters.createdAt,
@@ -79,7 +79,7 @@ export const getOrders = async (
             const searchNumber = Number(raw)
 
             // Ищем продукты по названию
-            const products = await Product.find({ title: searchRegex }, '_id')
+            const products = await Product.find({ title: searchRegex }, '_id').limit(1000).maxTimeMS(5000)
             const productIds = products.map((p) => p._id)
 
             // Создаем безопасные условия поиска
@@ -89,16 +89,14 @@ export const getOrders = async (
                 searchConditions.push({ orderNumber: searchNumber })
             }
 
-            if (productIds.length > 0) {
-                searchConditions.push({ products: { $in: productIds } })
-            }
+            searchConditions.push({ products: { $in: productIds } })
 
             if (searchConditions.length > 0) {
                 filters.$or = searchConditions
             }
         }
 
-        const sort: { [key: string]: any } = {}
+        const sort: Record<string, 1 | -1> = {}
 
         // Безопасная сортировка - только по разрешенным полям
         const allowedSortFields = [
@@ -114,13 +112,13 @@ export const getOrders = async (
         }
 
         // Используем безопасный подход с populate
-        const orders = await Order.find(filters)
+        const orders = await Order.find(filters).maxTimeMS(5000)
             .populate(['customer', 'products'])
             .sort(sort)
             .skip((normalizedPage - 1) * normalizedLimit)
             .limit(normalizedLimit)
 
-        const totalOrders = await Order.countDocuments(filters)
+        const totalOrders = await Order.countDocuments(filters).maxTimeMS(5000)
         const totalPages = Math.ceil(totalOrders / normalizedLimit)
 
         res.status(200).json({
@@ -143,73 +141,19 @@ export const getOrdersCurrentUser = async (
     next: NextFunction
 ) => {
     try {
-        const userId = res.locals.user._id
-        const { search, page = 1, limit = 5 } = req.query
-        // Нормализация лимита
-        const normalizedLimit = Math.min(Math.max(1, Number(limit)), 10)
-        const normalizedPage = Math.max(1, Number(page))
-        const options = {
-            skip: (normalizedPage - 1) * normalizedLimit,
-            limit: normalizedLimit,
-        }
-
-        const user = await User.findById(userId)
-            .populate({
-                path: 'orders',
-                populate: [
-                    {
-                        path: 'products',
-                    },
-                    {
-                        path: 'customer',
-                    },
-                ],
-            })
-            .orFail(
-                () =>
-                    new NotFoundError(
-                        'Пользователь по заданному id отсутствует в базе'
-                    )
-            )
-
-        let orders = user.orders as unknown as IOrder[]
-
+        const { page = 1, limit = 5, search } = req.query
+        const filters: FilterQuery<IOrder> = { customer: res.locals.user._id }
         if (search) {
-            // Экранируем пользовательский ввод перед созданием RegExp
-            const raw = String(search).slice(0, 200)
-            const searchRegex = new RegExp(escapeRegExp(raw), 'i')
-            const searchNumber = Number(raw)
-            const products = await Product.find({ title: searchRegex })
-            const productIds = products.map((product) => product._id)
-
-            orders = orders.filter((order) => {
-                // eslint-disable-next-line max-len
-                const matchesProductTitle = order.products.some((product) =>
-                    productIds.some((id) => id.equals(product._id))
-                )
-                // eslint-disable-next-line max-len
-                const matchesOrderNumber =
-                    !Number.isNaN(searchNumber) &&
-                    order.orderNumber === searchNumber
-
-                return matchesOrderNumber || matchesProductTitle
-            })
+            const expression = new RegExp(escapeRegExp(String(search)), 'i')
+            const products = await Product.find({ title: expression }, '_id').limit(1000).maxTimeMS(5000)
+            const conditions: FilterQuery<IOrder>[] = [{ products: { $in: products.map((product) => product._id) } }]
+            if (/^[0-9]{1,10}$/.test(String(search))) conditions.push({ orderNumber: Number(search) })
+            filters.$or = conditions
         }
-
-        const totalOrders = orders.length
-        const totalPages = Math.ceil(totalOrders / normalizedLimit)
-
-        orders = orders.slice(options.skip, options.skip + normalizedLimit)
-
-        return res.send({
-            orders,
-            pagination: {
-                totalOrders,
-                totalPages,
-                currentPage: normalizedPage,
-                pageSize: normalizedLimit,
-            },
-        })
+        const orders = await Order.find(filters).populate(['customer', 'products'])
+            .sort({ createdAt: -1 }).skip((Number(page) - 1) * Number(limit)).limit(Number(limit)).maxTimeMS(5000)
+        const totalOrders = await Order.countDocuments(filters).maxTimeMS(5000)
+        return res.json({ orders, pagination: { totalOrders, totalPages: Math.ceil(totalOrders / Number(limit)), currentPage: Number(page), pageSize: Number(limit) } })
     } catch (error) {
         next(error)
     }
@@ -281,20 +225,11 @@ export const createOrder = async (
 ) => {
     try {
         const basket: IProduct[] = []
-        const products = await Product.find<IProduct>({})
         const userId = res.locals.user._id
         const { address, payment, phone, total, email, items } = req.body
 
-        // Санитизация комментария: удаляем HTML теги
-        const sanitizedComment = (req.body.comment || '')
-            .replace(/<[^>]*>/g, '')
-            .slice(0, 500)
-
-        // Проверяем items: массив и допустимый размер
-        if (!Array.isArray(items) || items.length === 0 || items.length > 100) {
-            return next(new BadRequestError('Неверный список товаров'))
-        }
-
+        const sanitizedComment = sanitizeHTML(req.body.comment || '')
+        const products = await Product.find<IProduct>({ _id: { $in: items } }).maxTimeMS(5000)
         items.forEach((id: Types.ObjectId | string) => {
             if (!Types.ObjectId.isValid(String(id))) {
                 throw new BadRequestError(`Товар с id ${id} не найден`)
@@ -308,7 +243,7 @@ export const createOrder = async (
             }
             return basket.push(product)
         })
-        const totalBasket = basket.reduce((a, c) => a + c.price, 0)
+        const totalBasket = basket.reduce((a, c) => a + (c.price ?? 0), 0)
         if (totalBasket !== total) {
             return next(new BadRequestError('Неверная сумма заказа'))
         }

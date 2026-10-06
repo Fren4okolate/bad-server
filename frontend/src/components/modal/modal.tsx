@@ -13,7 +13,7 @@ const modalRoot = document.getElementById('modals')
 export default function Modal({ children, onClose, title }: ModalProps) {
     useEffect(() => {
         const handleEsc = (e: KeyboardEvent) => {
-            e.key === 'Escape' && onClose()
+            if (e.key === 'Escape') onClose()
         }
 
         document.addEventListener('keydown', handleEsc)

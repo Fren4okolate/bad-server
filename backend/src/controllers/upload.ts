@@ -1,73 +1,31 @@
-import { NextFunction, Request, Response } from 'express'
-import { constants } from 'http2'
-import fs from 'fs'
-import { join } from 'path'
+import { RequestHandler } from 'express'
+import fs from 'fs/promises'
+import path from 'path'
+import { randomUUID } from 'crypto'
+import sharp from 'sharp'
+import { PUBLIC_ROOT } from '../config'
 import BadRequestError from '../errors/bad-request-error'
 
-export const uploadFile = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
+export const uploadFile: RequestHandler = async (req, res, next) => {
+    const {file} = req
+    let output: string | undefined
     try {
-        if (!req.file) {
-            return next(new BadRequestError('Файл не загружен'))
-        }
-
-        const { filename: fileName, size, mimetype, originalname } = req.file
-
-        // Проверяем, что файл имеет безопасное имя (не оригинальное)
-        if (!fileName.includes('-') || fileName.includes('..') || fileName.includes('/')) {
-            return next(new BadRequestError('Некорректное имя файла'))
-        }
-
-        // Минимальный размер файла (2KB)
-        const minSize = 2 * 1024
-        if (typeof size === 'number' && size < minSize) {
-            return next(new BadRequestError('Файл слишком мал'))
-        }
-
-        // Проверим сигнатуру файла (magic bytes) чтобы убедиться, что файл соответствует указанному mime
-        try {
-            const tempDir = process.env.UPLOAD_PATH_TEMP || 'temp'
-            const fullPath = join(process.cwd(), 'public', tempDir, fileName)
-            const fd = fs.openSync(fullPath, 'r')
-            const header = Buffer.alloc(12)
-            fs.readSync(fd, header, 0, 12, 0)
-            fs.closeSync(fd)
-
-            let valid = false
-            if (mimetype === 'image/png') {
-                valid = header.slice(0, 4).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47]))
-            } else if (mimetype === 'image/jpeg' || mimetype === 'image/jpg') {
-                valid = header[0] === 0xFF && header[1] === 0xD8
-            } else if (mimetype === 'image/gif') {
-                const sig = header.toString('ascii', 0, 6)
-                valid = sig === 'GIF87a' || sig === 'GIF89a'
-            } else if (mimetype === 'image/webp') {
-                valid = header.toString('ascii', 0, 4) === 'RIFF' && header.toString('ascii', 8, 12) === 'WEBP'
-            }
-
-            if (!valid) {
-                return next(new BadRequestError('Некорректные метаданные файла'))
-            }
-        } catch (err) {
-            return next(err as Error)
-        }
-
-        const filePath = process.env.UPLOAD_PATH_TEMP
-            ? `${process.env.UPLOAD_PATH_TEMP}/${fileName}`
-            : `${fileName}`
-
-        return res.status(constants.HTTP_STATUS_CREATED).send({
-            fileName: filePath,
-            originalName: originalname,
-            size,
-            mimetype,
-        })
-    } catch (error) {
-        return next(error)
+        if (!file || file.size < 2048) throw new BadRequestError('Файл не загружен или меньше 2 КБ')
+        const image = sharp(file.path, { limitInputPixels: 16_000_000, failOn: 'warning' })
+        const metadata = await image.metadata()
+        const mimeFormats: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpeg', 'image/jpg': 'jpeg', 'image/gif': 'gif', 'image/webp': 'webp' }
+        if (metadata.format !== mimeFormats[file.mimetype]) throw new BadRequestError('Некорректные метаданные изображения')
+        const name = `${randomUUID()}.webp`
+        const directory = path.join(PUBLIC_ROOT, 'images')
+        await fs.mkdir(directory, { recursive: true })
+        output = path.join(directory, name)
+        // Re-encode pixels, stripping active data and metadata from the uploaded file.
+        await image.resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true }).webp().toFile(output)
+        res.status(201).json({ fileName: `/images/${name}`, originalName: path.basename(file.originalname), size: file.size, mimetype: 'image/webp' })
+    } catch (_error) {
+        if (output) await fs.unlink(output).catch(() => undefined)
+        next(new BadRequestError('Невалидное изображение. Разрешены PNG, JPEG, GIF и WEBP от 2 КБ до 10 МБ'))
+    } finally {
+        if (file) await fs.unlink(file.path).catch(() => undefined)
     }
 }
-
-export default {}

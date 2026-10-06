@@ -1,20 +1,17 @@
-# Users
+# Демонстрационные данные
 
-#### Default admin
-- login: `admin@mail.ru`
-- password: `password`
+Товары находятся в `weblarek.products.json`, изображения — в `backend/src/public/images`.
 
-#### Customer 1
-- login: `user1@mail.ru`
-- password: `password1`
+После запуска Compose выполните:
 
-# How to restore database
-1. Через MongoDB Compass подключаемся к базе по адресу:
+```bash
+docker compose exec -T backend npm run seed
 ```
-mongodb://root:example@localhost:27018/weblarek?authSource=admin
-```
-2. Выбираем коллекцию `users`, в ней `ADD DATA` и `Import JSON or CSV file`. Выбираем файл `.dump/weblarek.users.json`
-3. Выбираем коллекцию `products`, в ней `ADD DATA` и `Import JSON or CSV file`. Выбираем файл `.dump/weblarek.products.json`
-Файлы изображений для продуктов уже находятся в директории backend/src/public/images/
 
+При запуске без Docker: `npm run seed --prefix backend` после сборки backend и настройки `DB_ADDRESS`.
 
+Скрипт сохраняет идентификаторы товаров и создаёт `admin@mail.ru` / `password` с ролью администратора и `user1@mail.ru` / `password1` с ролью покупателя. Все пароли хешируются bcrypt. Для импорта только товаров задайте `SEED_USERS=false`.
+
+`weblarek.users.json` — старый демонстрационный дамп исходного проекта с MD5-хешами. Он оставлен как исходный материал, **не импортируйте его для входа**. Если он уже импортирован, `seed` заменяет старые хеши двух демонстрационных пользователей и очищает их refresh-токены. Других пользователей с MD5 нужно пересоздать.
+
+MongoDB не публикуется на порту компьютера; административные команды запускаются внутри контейнера. Не используйте демонстрационные аккаунты в production. `seed` запрещён при `NODE_ENV=production`.

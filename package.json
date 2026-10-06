@@ -1,0 +1,16 @@
+{
+  "name": "bad-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Аудит безопасности Web-ларёк",
+  "scripts": {
+    "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "lint": "npm run lint --prefix backend && npm run lint --prefix frontend",
+    "test": "npm test --prefix backend",
+    "audit": "npm audit --prefix backend && npm audit --prefix frontend",
+    "test:load": "node scripts/load-test.cjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

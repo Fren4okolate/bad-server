@@ -38,8 +38,8 @@ export default function LoginPage() {
                 <Input
                     value={values.email || ''}
                     onChange={handleChange}
-                    name='email'
-                    type='email'
+                    name='email' maxLength={254}
+                    type='email' autoComplete='email'
                     placeholder='Введите email'
                     label='Email'
                     required
@@ -48,8 +48,8 @@ export default function LoginPage() {
                 <Input
                     value={values.password || ''}
                     onChange={handleChange}
-                    name='password'
-                    type='password'
+                    name='password' minLength={6} maxLength={72}
+                    type='password' autoComplete='current-password'
                     placeholder='Введите пароль'
                     label='Пароль'
                     required

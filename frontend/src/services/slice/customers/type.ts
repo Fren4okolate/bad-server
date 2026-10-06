@@ -6,10 +6,9 @@ export interface CustomersValueType {
     title: string
     value: string | number
 }
-export interface CustomersDataFromServer extends ICustomerResult {}
+export type CustomersDataFromServer = ICustomerResult
 
-export interface CustomersData
-    extends ReturnType<typeof adapterCustomerFromServer> {}
+export type CustomersData = ReturnType<typeof adapterCustomerFromServer>
 
 export interface CustomersDataList {
     key: string
