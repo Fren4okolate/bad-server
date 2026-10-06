@@ -1,0 +1,55 @@
+name: Build, lint and security regression checks
+on:
+  push:
+    branches: [main, review]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports: [27019:27017]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - run: npm ci --prefix backend
+      - run: npm ci --prefix frontend
+      - run: npm run audit
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - run: docker compose config --quiet
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: docker compose up --build -d
+      - run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://localhost/api/health; then break; fi
+            sleep 2
+          done
+          curl --fail http://localhost/api/health
+          docker compose exec -T backend npm run seed
+          curl --fail http://localhost/api/product
+      - run: npm run test:load -- http://localhost/api/product 1000 40
+      - if: failure()
+        run: docker compose logs --tail=100
+      - if: always()
+        run: docker compose down
