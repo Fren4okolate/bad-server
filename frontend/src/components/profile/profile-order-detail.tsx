@@ -22,7 +22,6 @@ export default function ProfileOrderDetail() {
     const number = useParams().number || ''
     const dispatch = useDispatch()
     const orderData = useSelector(selectOrderByNumber(+number))
-    console.log(orderData)
 
     useEffect(() => {
         if (!orderData) {

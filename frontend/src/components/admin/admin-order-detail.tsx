@@ -70,7 +70,7 @@ export default function AdminOrderDetail() {
                         <span>{dataInfo.customer}</span>
                         <OpenInNewIcon
                             onClick={() =>
-                                navigate(`/admin/customer/${dataInfo.key}`)
+                                navigate(`/admin/customer/${dataInfo.customerId}`)
                             }
                         />
                     </div>

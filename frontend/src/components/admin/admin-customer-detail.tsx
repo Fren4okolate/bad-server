@@ -21,7 +21,6 @@ export default function AdminCustomerDetail() {
     const customerId = useParams().customerId || ''
     const customerData = useSelector(selectCustomerById(customerId))
     const dispatch = useDispatch()
-    console.log(customerData)
 
     useEffect(() => {
         if (!customerData) {
